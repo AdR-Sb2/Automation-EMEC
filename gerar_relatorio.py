@@ -32,7 +32,7 @@ def normalizar(valor):
 
 def data_do_arquivo(caminho):
     nome = os.path.basename(caminho)
-    m = re.search(r"(\\d{4}-\\d{2}-\\d{2})", nome)
+    m = re.search(r"(\d{4}-\d{2}-\d{2})", nome)
     if m:
         return datetime.strptime(m.group(1), "%Y-%m-%d").strftime("%d/%m/%Y")
     return datetime.now().strftime("%d/%m/%Y")
