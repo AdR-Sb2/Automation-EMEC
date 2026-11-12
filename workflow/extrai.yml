@@ -1,0 +1,35 @@
+name: Extrair atividades Field Service
+
+on:
+  schedule:
+    - cron: "0 9 * * *"    # 9h UTC = 6h em Brasília
+  workflow_dispatch:        # permite rodar manualmente para testar
+
+jobs:
+  extrair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Rodar extração
+        env:
+          OFSC_USUARIO: ${{ secrets.OFSC_USUARIO }}
+          OFSC_SENHA: ${{ secrets.OFSC_SENHA }}
+          PASTA_SAIDA: saida
+        run: python extrai_fieldservice.py
+
+      - name: Guardar CSV e logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atividades-${{ github.run_id }}
+          path: saida/
+          retention-days: 30
