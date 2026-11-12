@@ -65,34 +65,62 @@ def data_exibida(texto):
     return datetime(int(m.group(3)), mes, int(m.group(2))).date() if mes else None
 
 
-def login(page):
-    page.goto(URL, wait_until="networkidle")
 
-    # Etapa opcional: campo "Nome do ambiente", caso apareça antes do login
+def login(page):
+    log.info("Acessando Oracle Field Service...")
+    page.goto(URL, wait_until="domcontentloaded")
+
+    # Verifica se existe etapa de identificação do ambiente
     ambiente = page.get_by_label(re.compile("Nome do ambiente", re.I))
+
     if ambiente.count() and ambiente.first.is_visible():
         ambiente.first.fill(AMBIENTE)
-        page.get_by_role("button", name=re.compile("continuar|avançar|próximo|next", re.I)).first.click()
-        page.wait_for_load_state("networkidle")
+        page.get_by_role(
+            "button",
+            name=re.compile("continuar|avançar|próximo|next", re.I)
+        ).first.click()
 
-    # Usuário: campo id="username" (os outros com o mesmo rótulo são SSO ou checkbox)
+    # Aguarda o campo de usuário
     campo_usuario = page.locator("#username")
     campo_usuario.wait_for(state="visible", timeout=30_000)
-    campo_usuario.fill(USUARIO)
 
-    # Senha: primeiro campo de senha visível
+    log.info("Preenchendo credenciais...")
+    campo_usuario.fill(USUARIO)
     page.locator("input[type='password']:visible").first.fill(SENHA)
 
-    # O botão só fica ativo depois de preencher os dois campos
     page.get_by_role("button", name="Conectar").click()
 
-    # Espera a navegação pós-login
-    page.wait_for_timeout(5000)
+    # Aguarda a conclusão da autenticação
+    log.info("Aguardando resposta do Oracle...")
 
-    # Se o campo de senha ainda estiver visível, o login não foi concluído
-    if page.locator("input[type='password']:visible").count() > 0:
-        page.screenshot(path=os.path.join(PASTA, "logs", "pos_login.png"), full_page=True)
-        raise RuntimeError("Continuou na tela de login: verifique usuário/senha ou se a Oracle pediu código (MFA).")
+    autenticado = False
+
+    for tentativa in range(30):
+        page.wait_for_timeout(1000)
+
+        senha_visivel = (
+            page.locator("input[type='password']:visible").count() > 0
+        )
+
+        if not senha_visivel:
+            autenticado = True
+            break
+
+    # Registra evidências caso não tenha autenticado
+    if not autenticado:
+        caminho = os.path.join(PASTA, "logs", "pos_login.png")
+        page.screenshot(path=caminho, full_page=True)
+
+        texto = page.locator("body").inner_text()[:3000]
+
+        log.error("Login não concluído.")
+        log.error("URL atual: %s", page.url)
+        log.error("Texto apresentado na tela: %s", texto)
+
+        raise RuntimeError(
+            "Autenticação não concluída após 30 segundos. "
+            "Verifique pos_login.png e execucao.log."
+        )
 
     log.info("Login concluído. Página atual: %s", page.url)
 
