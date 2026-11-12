@@ -10,7 +10,11 @@ on:
         required: false
         default: ""
       email:
-        description: "E-mail que receberá os arquivos"
+        description: "E-mail para cópia (opcional)"
+        required: false
+        default: ""
+      request_id:
+        description: "Usado pela página web (não preencher manualmente)"
         required: false
         default: ""
 
@@ -37,28 +41,45 @@ jobs:
           DATAS: ${{ github.event.inputs.datas }}
         run: python extrai_fieldservice.py
 
-      - name: Enviar arquivos por e-mail
-        if: success() && github.event.inputs.email != ''
+      - name: Enviar resultado para a página
+        if: always() && github.event.inputs.request_id != ''
         env:
           APPS_URL: ${{ secrets.APPS_URL }}
           APPS_SECRET: ${{ secrets.APPS_SECRET }}
           EMAIL: ${{ github.event.inputs.email }}
+          REQUEST_ID: ${{ github.event.inputs.request_id }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           python - <<'EOF'
           import os, glob, base64, json, urllib.request
-          for caminho in glob.glob("saida/atividades_*.csv"):
+
+          url = os.environ["APPS_URL"]
+          segredo = os.environ["APPS_SECRET"]
+          email = os.environ["EMAIL"]
+          rid = os.environ["REQUEST_ID"]
+
+          def enviar(nome, conteudo_bytes):
               payload = {
-                  "secret": os.environ["APPS_SECRET"],
-                  "email": os.environ["EMAIL"],
-                  "arquivo": os.path.basename(caminho),
-                  "conteudo": base64.b64encode(open(caminho, "rb").read()).decode(),
+                  "secret": segredo,
+                  "request_id": rid,
+                  "email": email,
+                  "arquivo": nome,
+                  "conteudo": base64.b64encode(conteudo_bytes).decode(),
               }
               req = urllib.request.Request(
-                  os.environ["APPS_URL"],
+                  url,
                   data=json.dumps(payload).encode(),
                   headers={"Content-Type": "application/json"},
               )
-              print(urllib.request.urlopen(req, timeout=120).read().decode())
+              resposta = urllib.request.urlopen(req, timeout=180).read().decode()
+              print(nome, "->", resposta)
+
+          for caminho in sorted(glob.glob("saida/atividades_*.csv")):
+              with open(caminho, "rb") as f:
+                  enviar(os.path.basename(caminho), f.read())
+
+          status = "ok" if os.environ["JOB_STATUS"] == "success" else "erro"
+          enviar("STATUS.txt", status.encode())
           EOF
 
       - name: Guardar CSV e logs
