@@ -300,7 +300,8 @@ def abrir_equipe(page):
 
 
 def ir_para_dia(page, alvo):
-    for _ in range(60):
+    # Até 400 cliques: cobre intervalos de vários meses
+    for _ in range(400):
         atual = data_exibida(page.locator("body").inner_text())
         if atual is None:
             raise RuntimeError("Não consegui ler a data exibida no console.")
