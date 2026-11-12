@@ -71,6 +71,29 @@ def login(page):
 
     log.info("Login concluído. Página atual: %s", page.url)
         
+def selecionar_equipe(page):
+    cabecalho = page.locator("[data-ofsc-role='page-description-text']").first
+    cabecalho.wait_for(state="visible", timeout=30_000)
+
+    if EQUIPE in cabecalho.inner_text():
+        return  # já está na equipe certa
+
+    # Abre o seletor de equipe clicando no nome do cabeçalho
+    cabecalho.click()
+    busca = page.get_by_placeholder("Nome ou ID")
+    busca.wait_for(state="visible", timeout=15_000)
+    busca.fill(EQUIPE)
+    page.wait_for_timeout(1000)
+
+    # Clica na equipe na lista (botão da árvore com o nome)
+    page.locator("button.edt-label", has_text=EQUIPE).first.click()
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(1000)
+
+    if EQUIPE not in page.locator("[data-ofsc-role='page-description-text']").first.inner_text():
+        raise RuntimeError("Não consegui selecionar a equipe " + EQUIPE)
+
+
 def abrir_equipe(page):
     link = page.locator("a[title='Console de Alocação']").first
     if not link.is_visible():
@@ -79,12 +102,7 @@ def abrir_equipe(page):
     link.wait_for(state="visible", timeout=30_000)
     link.click()
     page.wait_for_load_state("networkidle")
-
-    # A página já abre na equipe; confirma que é a certa
-    cabecalho = page.locator("[data-ofsc-role='page-description-text']").first
-    cabecalho.wait_for(state="visible", timeout=30_000)
-    if EQUIPE not in cabecalho.inner_text():
-        raise RuntimeError(f"Console abriu em outra equipe: {cabecalho.inner_text()}")
+    selecionar_equipe(page)
 
 
 def ir_para_dia(page, alvo):
