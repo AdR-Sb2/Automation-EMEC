@@ -270,7 +270,8 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=not MODO_EXPLORAR)
-        page = browser.new_page(accept_downloads=True)
+        context = browser.new_context(accept_downloads=True)
+        page = context.new_page()
         try:
             login(page)
             abrir_equipe(page)
@@ -288,6 +289,7 @@ def main():
             log.error("Falha na extração: %s", e)
             sys.exit(1)
         finally:
+            context.close()
             browser.close()
 
 
