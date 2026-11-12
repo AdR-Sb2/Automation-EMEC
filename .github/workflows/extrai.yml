@@ -39,7 +39,7 @@ jobs:
           python-version: "3.12"
 
       - run: |
-          pip install playwright openpyxl
+          pip install playwright openpyxl reportlab
           playwright install --with-deps chromium
 
       - name: Rodar extração
@@ -51,7 +51,23 @@ jobs:
           EQUIPE: ${{ github.event.inputs.equipe }}
         run: python extrai_fieldservice.py
 
-      - name: Enviar arquivos para Drive e Outlook via Apps Script
+      - name: Gerar relatórios PDF
+        run: |
+          python - <<'PY'
+          import glob
+          import os
+          import subprocess
+          arquivos = sorted(glob.glob("saida/atividades_*.xlsx"))
+          if not arquivos:
+              raise SystemExit("Nenhuma planilha XLSX encontrada para gerar o relatório.")
+          for arquivo in arquivos:
+              subprocess.run(
+                  ["python", "gerar_relatorio.py", "--entrada", arquivo],
+                  check=True
+              )
+          PY
+
+      - name: Enviar planilhas e relatórios para Drive e Outlook via Apps Script
         if: always()
         env:
           APPS_URL: ${{ secrets.APPS_URL }}
@@ -60,7 +76,7 @@ jobs:
           REQUEST_ID: ${{ github.event.inputs.request_id }}
           JOB_STATUS: ${{ job.status }}
         run: |
-          python - <<'EOF'
+          python - <<'PY'
           import os, glob, base64, json, urllib.request
 
           url = os.environ["APPS_URL"]
@@ -84,16 +100,20 @@ jobs:
               resposta = urllib.request.urlopen(req, timeout=180).read().decode()
               print(nome, "->", resposta)
 
+          # Envia primeiro o PDF gerencial e depois a planilha original.
+          for caminho in sorted(glob.glob("saida/atividades_*_relatorio.pdf")):
+              with open(caminho, "rb") as f:
+                  enviar(os.path.basename(caminho), f.read())
+
           for caminho in sorted(glob.glob("saida/atividades_*.xlsx")):
               with open(caminho, "rb") as f:
                   enviar(os.path.basename(caminho), f.read())
 
           # A página web usa STATUS.txt para acompanhar execuções manuais.
-          # No agendamento diário, envia somente os relatórios Excel.
           if rid:
               status = "ok" if os.environ["JOB_STATUS"] == "success" else "erro"
               enviar("STATUS.txt", status.encode())
-          EOF
+          PY
 
       - name: Guardar arquivos e logs
         if: always()
