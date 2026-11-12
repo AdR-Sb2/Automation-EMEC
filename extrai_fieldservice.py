@@ -61,8 +61,15 @@ def login(page):
     page.get_by_role("button", name="Conectar").click()
     page.wait_for_load_state("networkidle")
 
-    if page.locator("text=/código|verificação|token|MFA/i").count() > 0:
-        raise RuntimeError("Login pede verificação em duas etapas. Peça à TI uma conta de serviço sem MFA.")
+    # Espera a navegação pós-login
+    page.wait_for_timeout(5000)
+
+    # Se o campo de senha ainda estiver visível, o login não foi concluído
+    if page.locator("input[type='password']:visible").count() > 0:
+        page.screenshot(path=os.path.join(PASTA, "logs", "pos_login.png"), full_page=True)
+        raise RuntimeError("Continuou na tela de login: verifique usuário/senha ou se a Oracle pediu código (MFA).")
+
+    log.info("Login concluído. Página atual: %s", page.url)
         
 def abrir_equipe(page):
     page.get_by_text("Console de Alocação").first.click()
