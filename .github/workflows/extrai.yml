@@ -17,6 +17,10 @@ on:
         description: "Usado pela página web (não preencher manualmente)"
         required: false
         default: ""
+      equipe:
+        description: "Superintendência (equipe de manutenção)"
+        required: false
+        default: "MANUTENÇÃO - BAIXADA 2"
 
 jobs:
   extrair:
@@ -39,6 +43,7 @@ jobs:
           OFSC_SENHA: ${{ secrets.OFSC_SENHA }}
           PASTA_SAIDA: saida
           DATAS: ${{ github.event.inputs.datas }}
+          EQUIPE: ${{ github.event.inputs.equipe }}
         run: python extrai_fieldservice.py
 
       - name: Enviar resultado para a página
