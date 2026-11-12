@@ -2,7 +2,8 @@ name: Extrair atividades Field Service
 
 on:
   schedule:
-    - cron: "0 9 * * *"
+    # 07:00 no horário de Brasília (10:00 UTC)
+    - cron: "0 10 * * *"
   workflow_dispatch:
     inputs:
       datas:
@@ -50,12 +51,12 @@ jobs:
           EQUIPE: ${{ github.event.inputs.equipe }}
         run: python extrai_fieldservice.py
 
-      - name: Enviar resultado para a página
-        if: always() && github.event.inputs.request_id != ''
+      - name: Enviar arquivos para Drive e Outlook via Apps Script
+        if: always()
         env:
           APPS_URL: ${{ secrets.APPS_URL }}
           APPS_SECRET: ${{ secrets.APPS_SECRET }}
-          EMAIL: ${{ github.event.inputs.email }}
+          EMAIL: ${{ github.event.inputs.email || secrets.EMAIL_DESTINO }}
           REQUEST_ID: ${{ github.event.inputs.request_id }}
           JOB_STATUS: ${{ job.status }}
         run: |
@@ -87,8 +88,11 @@ jobs:
               with open(caminho, "rb") as f:
                   enviar(os.path.basename(caminho), f.read())
 
-          status = "ok" if os.environ["JOB_STATUS"] == "success" else "erro"
-          enviar("STATUS.txt", status.encode())
+          # A página web usa STATUS.txt para acompanhar execuções manuais.
+          # No agendamento diário, envia somente os relatórios Excel.
+          if rid:
+              status = "ok" if os.environ["JOB_STATUS"] == "success" else "erro"
+              enviar("STATUS.txt", status.encode())
           EOF
 
       - name: Guardar arquivos e logs
