@@ -320,6 +320,7 @@ def exportar(page, destino):
     with page.expect_download(timeout=120_000) as info:
         page.locator("[data-bar-id='dc__top_panel__configured_action_action_link__export_queue']").click()
     info.value.save_as(destino)
+    return tratar_exportacao(destino)
 
 
 def explorar(page):
@@ -347,8 +348,8 @@ def main():
             for dia in datas:
                 destino = os.path.join(PASTA, f"atividades_{dia.isoformat()}.csv")
                 ir_para_dia(page, dia)
-                exportar(page, destino)
-                log.info("Exportado: %s", destino)
+                final = exportar(page, destino)
+                log.info("Arquivo final: %s", final)
             log.info("Concluído: %d dia(s) exportado(s).", len(datas))
         except (PWTimeout, RuntimeError) as e:
             page.screenshot(path=os.path.join(PASTA, "logs", f"erro_{datetime.now():%Y%m%d_%H%M%S}.png"))
