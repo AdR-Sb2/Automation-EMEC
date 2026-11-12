@@ -22,6 +22,10 @@ on:
         required: false
         default: "MANUTENÇÃO - BAIXADA 2"
 
+concurrency:
+  group: field-service-oracle
+  cancel-in-progress: false
+
 jobs:
   extrair:
     runs-on: ubuntu-latest
@@ -34,7 +38,7 @@ jobs:
           python-version: "3.12"
 
       - run: |
-          pip install playwright
+          pip install playwright openpyxl
           playwright install --with-deps chromium
 
       - name: Rodar extração
@@ -79,7 +83,7 @@ jobs:
               resposta = urllib.request.urlopen(req, timeout=180).read().decode()
               print(nome, "->", resposta)
 
-          for caminho in sorted(glob.glob("saida/atividades_*.csv")):
+          for caminho in sorted(glob.glob("saida/atividades_*.xlsx")):
               with open(caminho, "rb") as f:
                   enviar(os.path.basename(caminho), f.read())
 
@@ -87,7 +91,7 @@ jobs:
           enviar("STATUS.txt", status.encode())
           EOF
 
-      - name: Guardar CSV e logs
+      - name: Guardar arquivos e logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
