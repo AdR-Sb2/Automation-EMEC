@@ -4,10 +4,20 @@ on:
   schedule:
     - cron: "0 9 * * *"
   workflow_dispatch:
+    inputs:
+      datas:
+        description: "Datas AAAA-MM-DD separadas por vírgula, ou intervalo com ':'. Vazio = dia anterior"
+        required: false
+        default: ""
+      email:
+        description: "E-mail que receberá os arquivos"
+        required: false
+        default: ""
 
 jobs:
   extrair:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +34,32 @@ jobs:
           OFSC_USUARIO: ${{ secrets.OFSC_USUARIO }}
           OFSC_SENHA: ${{ secrets.OFSC_SENHA }}
           PASTA_SAIDA: saida
+          DATAS: ${{ github.event.inputs.datas }}
         run: python extrai_fieldservice.py
+
+      - name: Enviar arquivos por e-mail
+        if: success() && github.event.inputs.email != ''
+        env:
+          APPS_URL: ${{ secrets.APPS_URL }}
+          APPS_SECRET: ${{ secrets.APPS_SECRET }}
+          EMAIL: ${{ github.event.inputs.email }}
+        run: |
+          python - <<'EOF'
+          import os, glob, base64, json, urllib.request
+          for caminho in glob.glob("saida/atividades_*.csv"):
+              payload = {
+                  "secret": os.environ["APPS_SECRET"],
+                  "email": os.environ["EMAIL"],
+                  "arquivo": os.path.basename(caminho),
+                  "conteudo": base64.b64encode(open(caminho, "rb").read()).decode(),
+              }
+              req = urllib.request.Request(
+                  os.environ["APPS_URL"],
+                  data=json.dumps(payload).encode(),
+                  headers={"Content-Type": "application/json"},
+              )
+              print(urllib.request.urlopen(req, timeout=120).read().decode())
+          EOF
 
       - name: Guardar CSV e logs
         if: always()
