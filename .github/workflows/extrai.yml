@@ -2,8 +2,8 @@ name: Extrair atividades Field Service
 
 on:
   schedule:
-    - cron: "0 9 * * *"    # 9h UTC = 6h em Brasília
-  workflow_dispatch:        # permite rodar manualmente para testar
+    - cron: "0 9 * * *"
+  workflow_dispatch:
 
 jobs:
   extrair:
