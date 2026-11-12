@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from tratar_exportacao import tratar_exportacao
 
 URL = "https://aegeappp.fs.ocs.oraclecloud.com/"
 AMBIENTE = "aegeappp"
