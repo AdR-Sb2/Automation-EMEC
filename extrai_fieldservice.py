@@ -80,13 +80,13 @@ def selecionar_equipe(page):
 
     # Abre o seletor de equipe clicando no nome do cabeçalho
     cabecalho.click()
-    busca = page.get_by_placeholder("Nome ou ID")
+    busca = page.locator("input[placeholder='Nome ou ID']:visible").first
     busca.wait_for(state="visible", timeout=15_000)
     busca.fill(EQUIPE)
     page.wait_for_timeout(1000)
 
-    # Clica na equipe na lista (botão da árvore com o nome)
-    page.locator("button.edt-label", has_text=EQUIPE).first.click()
+    # Clica na equipe na lista
+    page.locator("button.edt-label:visible", has_text=EQUIPE).first.click()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(1000)
 
