@@ -66,63 +66,139 @@ def data_exibida(texto):
 
 
 
+
 def login(page):
     log.info("Acessando Oracle Field Service...")
-    page.goto(URL, wait_until="domcontentloaded")
 
-    # Verifica se existe etapa de identificação do ambiente
-    ambiente = page.get_by_label(re.compile("Nome do ambiente", re.I))
+    page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+
+    # Etapa opcional: identificação do ambiente
+    ambiente = page.get_by_label(
+        re.compile("Nome do ambiente", re.I)
+    )
 
     if ambiente.count() and ambiente.first.is_visible():
+        log.info("Tela de identificação do ambiente encontrada.")
         ambiente.first.fill(AMBIENTE)
+
         page.get_by_role(
             "button",
             name=re.compile("continuar|avançar|próximo|next", re.I)
         ).first.click()
 
-    # Aguarda o campo de usuário
-    campo_usuario = page.locator("#username")
-    campo_usuario.wait_for(state="visible", timeout=30_000)
+    # Aguarda o carregamento da tela de autenticação
+    senha = page.locator("input[type='password']:visible").first
+    senha.wait_for(state="visible", timeout=30000)
 
-    log.info("Preenchendo credenciais...")
-    campo_usuario.fill(USUARIO)
-    page.locator("input[type='password']:visible").first.fill(SENHA)
+    # Verifica se o Oracle solicitou usuário ou somente senha
+    usuario = page.locator("#username")
 
-    page.get_by_role("button", name="Conectar").click()
+    if usuario.count() and usuario.first.is_visible():
+        log.info("Login completo: usuário e senha.")
+        usuario.first.fill(USUARIO)
 
-    # Aguarda a conclusão da autenticação
-    log.info("Aguardando resposta do Oracle...")
+    else:
+        log.info(
+            "Tela de senha direta detectada. "
+            "O Oracle já apresentou uma identificação de usuário."
+        )
 
+    # Preenche a senha disponível
+    senha.fill(SENHA)
+
+    # Localiza o botão de autenticação
+    botao = page.get_by_role(
+        "button",
+        name=re.compile(r"conectar|entrar|login|sign in", re.I)
+    ).first
+
+    botao.wait_for(state="visible", timeout=15000)
+    botao.click()
+
+    log.info("Credenciais enviadas. Aguardando resposta do Oracle...")
+
+    # Aguarda autenticação e identifica erros específicos
+    limite = 45
     autenticado = False
 
-    for tentativa in range(30):
+    for _ in range(limite):
         page.wait_for_timeout(1000)
 
+        texto = page.locator("body").inner_text().lower()
+
+        # Limite de sessões
+        if (
+            "número máximo de sessões" in texto
+            or "maximum number of sessions" in texto
+            or "session limit" in texto
+        ):
+            raise RuntimeError(
+                "LIMITE DE SESSÕES ORACLE ATINGIDO. "
+                "É necessário verificar as sessões ativas."
+            )
+
+        # Credenciais rejeitadas
+        if any(msg in texto for msg in [
+            "senha incorreta",
+            "usuário ou senha inválidos",
+            "invalid username or password",
+            "incorrect password",
+            "authentication failed"
+        ]):
+            raise RuntimeError(
+                "ORACLE RECUSOU AS CREDENCIAIS. "
+                "Verifique o usuário e a senha."
+            )
+
+        # Possível autenticação adicional
+        if any(msg in texto for msg in [
+            "verification code",
+            "código de verificação",
+            "two-factor authentication",
+            "autenticação multifator",
+            "multi-factor authentication"
+        ]):
+            raise RuntimeError(
+                "ORACLE SOLICITOU AUTENTICAÇÃO ADICIONAL (MFA)."
+            )
+
+        # Confirmação pela presença do Console de Alocação
+        console = page.locator(
+            "a[title='Console de Alocação']"
+        )
+
+        if console.count() and console.first.is_visible():
+            autenticado = True
+            break
+
+        # Segunda possibilidade: tela de login desapareceu
         senha_visivel = (
             page.locator("input[type='password']:visible").count() > 0
         )
 
-        if not senha_visivel:
+        if not senha_visivel and "login" not in page.url.lower():
             autenticado = True
             break
 
-    # Registra evidências caso não tenha autenticado
     if not autenticado:
-        caminho = os.path.join(PASTA, "logs", "pos_login.png")
+        caminho = os.path.join(
+            PASTA, "logs", "pos_login.png"
+        )
+
         page.screenshot(path=caminho, full_page=True)
 
         texto = page.locator("body").inner_text()[:3000]
 
-        log.error("Login não concluído.")
+        log.error("Autenticação não confirmada.")
         log.error("URL atual: %s", page.url)
-        log.error("Texto apresentado na tela: %s", texto)
+        log.error("Conteúdo da tela: %s", texto)
 
         raise RuntimeError(
-            "Autenticação não concluída após 30 segundos. "
+            "Não foi possível confirmar o login após 45 segundos. "
             "Verifique pos_login.png e execucao.log."
         )
 
-    log.info("Login concluído. Página atual: %s", page.url)
+    log.info("Login confirmado com sucesso. Página: %s", page.url)
 
 
 def selecionar_equipe(page):
