@@ -45,14 +45,17 @@ def login(page):
     # Etapa opcional: campo "Nome do ambiente", caso apareça antes do login
     ambiente = page.get_by_label(re.compile("Nome do ambiente", re.I))
     if ambiente.count() and ambiente.first.is_visible():
-        ambiente.first.fill("aegeappp")
+        ambiente.first.fill(AMBIENTE)
         page.get_by_role("button", name=re.compile("continuar|avançar|próximo|next", re.I)).first.click()
         page.wait_for_load_state("networkidle")
 
-    # Usuário e senha
-    page.get_by_label("Nome de Usuário").wait_for(state="visible", timeout=30_000)
-    page.get_by_label("Nome de Usuário").fill(USUARIO)
-    page.get_by_label("Senha").fill(SENHA)
+    # Usuário: campo id="username" (os outros com o mesmo rótulo são SSO ou checkbox)
+    campo_usuario = page.locator("#username")
+    campo_usuario.wait_for(state="visible", timeout=30_000)
+    campo_usuario.fill(USUARIO)
+
+    # Senha: primeiro campo de senha visível
+    page.locator("input[type='password']:visible").first.fill(SENHA)
 
     # O botão só fica ativo depois de preencher os dois campos
     page.get_by_role("button", name="Conectar").click()
@@ -60,7 +63,7 @@ def login(page):
 
     if page.locator("text=/código|verificação|token|MFA/i").count() > 0:
         raise RuntimeError("Login pede verificação em duas etapas. Peça à TI uma conta de serviço sem MFA.")
-
+        
 def abrir_equipe(page):
     page.get_by_text("Console de Alocação").first.click()
     page.wait_for_load_state("networkidle")
