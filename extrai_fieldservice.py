@@ -7,10 +7,12 @@ from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 URL = "https://aegeappp.fs.ocs.oraclecloud.com/"
+AMBIENTE = "aegeappp"
 USUARIO = os.environ["OFSC_USUARIO"]
 SENHA = os.environ["OFSC_SENHA"]
 EQUIPE = "MANUTENÇÃO - BAIXADA 2"
 PASTA = os.environ.get("PASTA_SAIDA", "saida")
+DATAS = os.environ.get("DATAS", "")
 TZ = ZoneInfo("America/Sao_Paulo")
 MODO_EXPLORAR = "--explorar" in sys.argv
 
@@ -28,6 +30,30 @@ log = logging.getLogger("fieldservice")
 
 MESES = {"janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4, "maio": 5, "junho": 6,
          "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12}
+
+
+def datas_alvo():
+    """Sem DATAS: dia anterior. Com DATAS: lista ou intervalo (AAAA-MM-DD, separados por vírgula ou ':')."""
+    entrada = DATAS.strip()
+    if not entrada:
+        return [datetime.now(TZ).date() - timedelta(days=1)]
+
+    datas = set()
+    for item in entrada.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if ":" in item:
+            ini_txt, fim_txt = item.split(":")
+            ini = datetime.strptime(ini_txt.strip(), "%Y-%m-%d").date()
+            fim = datetime.strptime(fim_txt.strip(), "%Y-%m-%d").date()
+            d = ini
+            while d <= fim:
+                datas.add(d)
+                d += timedelta(days=1)
+        else:
+            datas.add(datetime.strptime(item, "%Y-%m-%d").date())
+    return sorted(datas)
 
 
 def data_exibida(texto):
@@ -59,7 +85,6 @@ def login(page):
 
     # O botão só fica ativo depois de preencher os dois campos
     page.get_by_role("button", name="Conectar").click()
-    page.wait_for_load_state("networkidle")
 
     # Espera a navegação pós-login
     page.wait_for_timeout(5000)
@@ -70,7 +95,8 @@ def login(page):
         raise RuntimeError("Continuou na tela de login: verifique usuário/senha ou se a Oracle pediu código (MFA).")
 
     log.info("Login concluído. Página atual: %s", page.url)
-        
+
+
 def selecionar_equipe(page):
     cabecalho = page.locator("[data-ofsc-role='page-description-text']").first
     cabecalho.wait_for(state="visible", timeout=30_000)
@@ -106,7 +132,7 @@ def abrir_equipe(page):
 
 
 def ir_para_dia(page, alvo):
-    for _ in range(10):
+    for _ in range(60):
         atual = data_exibida(page.locator("body").inner_text())
         if atual is None:
             raise RuntimeError("Não consegui ler a data exibida no console.")
@@ -125,6 +151,7 @@ def exportar(page, destino):
         page.locator("[data-bar-id='dc__top_panel__configured_action_action_link__export_queue']").click()
     info.value.save_as(destino)
 
+
 def explorar(page):
     page.screenshot(path=os.path.join(PASTA, "logs", "tela_inicial.png"), full_page=True)
     botoes = page.locator("button, [role='button'], a").all_inner_texts()
@@ -134,8 +161,8 @@ def explorar(page):
 
 
 def main():
-    ontem = datetime.now(TZ).date() - timedelta(days=1)
-    destino = os.path.join(PASTA, f"atividades_{ontem.isoformat()}.csv")
+    datas = datas_alvo()
+    log.info("Datas a extrair: %s", ", ".join(d.isoformat() for d in datas))
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=not MODO_EXPLORAR)
@@ -146,9 +173,12 @@ def main():
             if MODO_EXPLORAR:
                 explorar(page)
                 return
-            ir_para_dia(page, ontem)
-            exportar(page, destino)
-            log.info("Exportado com sucesso: %s", destino)
+            for dia in datas:
+                destino = os.path.join(PASTA, f"atividades_{dia.isoformat()}.csv")
+                ir_para_dia(page, dia)
+                exportar(page, destino)
+                log.info("Exportado: %s", destino)
+            log.info("Concluído: %d dia(s) exportado(s).", len(datas))
         except (PWTimeout, RuntimeError) as e:
             page.screenshot(path=os.path.join(PASTA, "logs", f"erro_{datetime.now():%Y%m%d_%H%M%S}.png"))
             log.error("Falha na extração: %s", e)
