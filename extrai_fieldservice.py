@@ -72,10 +72,19 @@ def login(page):
     log.info("Login concluído. Página atual: %s", page.url)
         
 def abrir_equipe(page):
-    page.get_by_text("Console de Alocação").first.click()
+    link = page.locator("a[title='Console de Alocação']").first
+    if not link.is_visible():
+        page.get_by_role("button", name="Menu", exact=True).click()
+        page.wait_for_timeout(1000)
+    link.wait_for(state="visible", timeout=30_000)
+    link.click()
     page.wait_for_load_state("networkidle")
-    page.get_by_text(EQUIPE, exact=False).first.click()
-    page.wait_for_load_state("networkidle")
+
+    # A página já abre na equipe; confirma que é a certa
+    cabecalho = page.locator("[data-ofsc-role='page-description-text']").first
+    cabecalho.wait_for(state="visible", timeout=30_000)
+    if EQUIPE not in cabecalho.inner_text():
+        raise RuntimeError(f"Console abriu em outra equipe: {cabecalho.inner_text()}")
 
 
 def ir_para_dia(page, alvo):
@@ -85,20 +94,18 @@ def ir_para_dia(page, alvo):
             raise RuntimeError("Não consegui ler a data exibida no console.")
         if atual == alvo:
             return
-        if atual > alvo:
-            page.get_by_role("button", name=re.compile("anterior|previous", re.I)).first.click()
-        else:
-            page.get_by_role("button", name=re.compile("próximo|next", re.I)).first.click()
+        nome = "Anterior" if atual > alvo else "Próximo"
+        page.get_by_role("button", name=nome, exact=True).click()
         page.wait_for_load_state("networkidle")
     raise RuntimeError(f"Não consegui chegar em {alvo}.")
 
 
 def exportar(page, destino):
-    page.get_by_role("button", name="Ações").click()
+    page.get_by_role("button", name="Ações", exact=True).click()
+    page.wait_for_timeout(500)
     with page.expect_download(timeout=120_000) as info:
-        page.get_by_text("Exportar", exact=True).click()
+        page.locator("[data-bar-id='dc__top_panel__configured_action_action_link__export_queue']").click()
     info.value.save_as(destino)
-
 
 def explorar(page):
     page.screenshot(path=os.path.join(PASTA, "logs", "tela_inicial.png"), full_page=True)
